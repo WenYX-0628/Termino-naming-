@@ -1,7 +1,7 @@
 ---
 id: variable-naming
 name: Variable Naming
-description: 规范代码变量命名 + 文档图片/表格/公式标题命名审查——检测不规范命名（拼音、中文、意义不明的缩写），基于内置中英文术语词典（含通用编程 + 雷达/信号处理 + 气象 + LiDAR 600+ 条术语）给出规范建议，并可自动/手动应用重命名。
+description: 规范代码变量命名 + UI/日志/绘图字符串 + 文档图片标题命名审查——检测不规范命名（拼音、中文、意义不明的缩写），基于内置中英文术语词典（含通用编程 + 雷达/信号处理 + 气象 + LiDAR + 国标PDF 600+ 条术语）给出规范建议，并可自动/手动应用重命名。UI/日志字符串在语法正确前提下容许中英文混写，仅修复格式规范及术语一致性问题。
 category: Code
 requires: []
 examples:
@@ -15,6 +15,8 @@ examples:
   - /variable-naming caption review 审查文档中图片/表格标题命名
   - /variable-naming caption fix 审查并修复标题命名
   - /variable-naming caption format 查看标题命名规范格式
+  - /variable-naming ui review 审查 UI/日志/绘图字符串
+  - /variable-naming ui fix 审查并修复 UI/日志/绘图字符串
 ---
 
 # Variable Naming Skill
@@ -46,6 +48,37 @@ examples:
 | 术语不规范 | 标题中用了不规范的术语 | 对照术语词典修正 |
 | 图表术语不统一 | 正文用"用户"，标题用"使用者" | 统一为词典推荐术语 |
 
+### UI / 日志 / 绘图字符串
+
+审查代码中的 `fprintf`、`print`、`console.log`、`title`、`xlabel`、`ylabel`、`legend`、`error`、`warning` 等函数中的字符串内容。**在语法正确的前提下，容许中英文混写**（例如中文叙述 + 英文术语/单位），仅检测格式不规范及术语一致性问题：
+
+| 问题类型 | 示例（❌ 不通过） | 建议 |
+|---------|-----------------|------|
+| 无空格断句 | `'功率(dB)'` | `'功率 (dB)'`（中文与括号间加空格） |
+| 中英文间无空格 | `'噪声参数:%.1f dB'` | `'噪声参数: %.1f dB'`（冒号后加空格） |
+| 英文大小写不当 | `title('doppler spectrum')` | `title('Doppler Spectrum')`（英文标题式大写） |
+| 中文句尾混英文无空格 | `'正在处理%d个距离库'` | `'正在处理 %d 个距离库'`（格式化占位符前后加空格） |
+| **术语不统一** | 同一概念混用不同词（如"杂波"vs"地物"、"信号"vs"回波"） | 统一为上下文约定术语 |
+| **术语与词典不符** | 英文术语拼写/缩写与词典不一致 | 对照词典修正（如 `snr`→`SNR`、`doppler`→`Doppler`） |
+| 中文标点混用 | 英文句中使用中文逗号、括号 | 统一使用英文标点 |
+
+**术语一致性检查规则：**
+- 跨文件扫描同一概念的中英称呼，发现不一致时报警
+- 对照内置术语词典，检查英文缩写/大小写是否正确（如 `prf`→`PRF`、`snr`→`SNR`）
+- 同义术语在项目内应统一（如"地物杂波"vs"地面杂波"→选择一种）
+- 对照 `/variable-naming dict` 查询推荐术语
+
+**以下情况视为规范，不报错：**
+
+**以下情况视为规范，不报错：**
+| 写法 | 说明 |
+|------|------|
+| `'噪声参数: %.1f dB'` | ✅ 中文叙述 + 英文单位，空格规范 |
+| `'功率 (dB)'` | ✅ 中文 + 英文单位，括号前有空格 |
+| `'原始 I/Q'` | ✅ 中文 + 英文缩写 |
+| `title('多普勒谱 / Doppler Spectrum')` | ✅ 中英文对照，语法完整 |
+| `'正在处理 N=%d 个脉冲'` | ✅ 中文 + 格式化变量，空格规范 |
+
 ## 用法
 
 ### `/variable-naming review [路径]`
@@ -72,6 +105,12 @@ examples:
 ### `/variable-naming caption format`
 查看标题命名规范说明，包括编号格式、中英文对照写法、大小写规则等。
 
+### `/variable-naming ui review [路径]`
+审查指定路径下代码中的 UI/日志/绘图字符串（`fprintf`、`title`、`xlabel`、`ylabel`、`legend`、`error`、`warning`、`console.log`、`print` 等），检测中英文混写、中文残留、术语不规范等问题。
+
+### `/variable-naming ui fix [路径]`
+审查并交互式修复 UI/日志/绘图字符串中的中文残留（逐个确认，或 `--yes` 自动应用）。
+
 ## 工作流程
 
 ### 代码变量命名
@@ -97,6 +136,24 @@ examples:
    - 大小写风格：检查 Sentence case vs Title Case 是否统一
 3. **输出建议**：列出文件、标题行、问题类型、建议修改
 4. **应用**（fix 模式）：逐个或批量修正标题
+
+### UI / 日志 / 绘图字符串
+
+1. **扫描**：读取源代码文件（`.py .js .ts .go .java .rs .c .cpp .h .hpp .m`），匹配以下模式的字符串内容：
+   - 控制台输出：`fprintf`、`printf`、`print`、`console.log`、`println`、`fmt.Printf`、`fmt.Println`
+   - 绘图标签：`title`、`xlabel`、`ylabel`、`zlabel`、`label`、`set(gca, ...)`
+   - 图例：`legend`、`sgtitle`、`suptitle`、`subtitle`
+   - 错误/警告：`error`、`warning`、`throw`、`alert`、`toast`
+   - 状态栏/提示：`statusbar`、`tooltip`、`hint`、`notify`
+2. **分析**（容许语法正确的混写，仅报格式和术语问题）：
+   - 空格规范：中文与英文/数字/格式化占位符之间是否缺空格
+   - 括号规范：中文与英文括号是否混用
+   - 标点规范：英文文本中是否混入中文逗号、句号、括号
+   - 大小写规范：英文部分是否该用 Title Case
+   - **术语一致性**：对照术语词典，检查英文单词拼写/大小写/缩写格式
+   - **同义术语**：跨文件扫描同一概念是否有不同称呼
+3. **输出建议**：列出文件、行号、函数名、问题类型
+4. **应用**（ui fix 模式）：逐个或批量修正格式问题
 
 ## 内置中英文术语词典
 
